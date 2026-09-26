@@ -1,6 +1,6 @@
 // Ember & Oath: a serious dark-fantasy idle RPG. Party DPS clears stages; bosses every 5.
 import { fmt, costOf, stepMult, nextStep, buyN, modeLabel, setText, toggle, fill, show, restartAnim } from '../util.js';
-import { upgradeList, revealCount, simulate } from './common.js';
+import { upgradeList, revealCount, simulate, pickBuy, buysPer } from './common.js';
 import { ART } from '../art.js';
 
 const HEROES = [
@@ -91,6 +91,32 @@ function monInfo(s) {
   const m = r.mons[(s.mon * 7) % r.mons.length];
   return { region, icon: m[0], name: m[1] };
 }
+function buyBlade(s, n, ctx) {
+  const c = costOf(BLADE, BG, s.blade, n);
+  if (s.gold < c) return 0;
+  s.gold -= c;
+  const before = Math.floor(s.blade / 25);
+  s.blade += n;
+  if (Math.floor(s.blade / 25) > before) ctx.emit(4, '🗡️ Your blade hums. Tap damage ×2');
+  return 1;
+}
+function buyHero(s, h, n, ctx) {
+  const had = s.heroes[h.id] || 0, c = costOf(h.cost, G, had, n);
+  if (s.gold < c) return 0;
+  s.gold -= c;
+  s.heroes[h.id] = had + n;
+  const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
+  if (!had) ctx.emit(6, `${h.icon} ${h.name} joins your party`);
+  if (steps) ctx.emit(4 * steps, `${h.icon} ${h.name} grows stronger. Damage ×${2 ** steps}`);
+  return steps ? 2 : 1;
+}
+function buyUp(s, u, ctx) {
+  if (s.gold < u.cost || s.ups[u.id]) return false;
+  s.gold -= u.cost;
+  s.ups[u.id] = true;
+  ctx.emit(3, `${u.icon} ${u.name}: ${u.desc}`);
+  return true;
+}
 const gainOf = (s, pm) => (s.runMax > 30 ? Math.floor(((s.runMax - 20) / 10) ** 1.5 * pm) : 0);
 
 const game = {
@@ -128,6 +154,26 @@ const game = {
       if (s.fail <= 0) { s.fail = 0; s.stage++; spawn(s); }
     }
   },
+
+  autopilot(s, ctx, a) {
+    if (s.fail > 0 && a.q > 0.5) s.fail = Math.min(s.fail, 10);
+    for (let k = buysPer(a.q); k > 0; k--) {
+      const u = a.ups && UPGRADES.find(x => !s.ups[x.id] && s.gold >= x.cost);
+      if (u) { buyUp(s, u, ctx); continue; }
+      const reveal = revealCount(HEROES, x => s.heroes[x.id]);
+      const opts = HEROES.slice(0, reveal + 1).map(x => {
+        const n = s.heroes[x.id] || 0;
+        return { x, cost: costOf(x.cost, G, n, 1), gain: x.dps * ((n + 1) * stepMult(n + 1) - n * stepMult(n)) };
+      });
+      const bc = costOf(BLADE, BG, s.blade, 1);
+      if (bc <= s.gold && s.blade < s.stage * 2 && bc * 4 < Math.min(...opts.map(o => o.cost))) { buyBlade(s, 1, ctx); continue; }
+      const o = pickBuy(opts.filter(o => o.cost <= s.gold), a.q);
+      if (!o) break;
+      buyHero(s, o.x, 1, ctx);
+    }
+  },
+  score: s => s.stage,
+  scoreLabel: 'stage',
 
   grant(s, sec, ctx) {
     const kps = Math.min(Math.max(dps(s, ctx) / hpOf(s.stage), 0.5), 20);
@@ -209,24 +255,13 @@ const game = {
       } else if (act === 'lvl') {
         const id = b.closest('[data-h]').dataset.h;
         if (id === 'blade') {
-          const n = buyN(api.mode(), BLADE, BG, s.blade, s.gold), c = costOf(BLADE, BG, s.blade, n);
-          if (s.gold < c) return;
-          s.gold -= c;
-          const before = Math.floor(s.blade / 25);
-          s.blade += n;
-          if (Math.floor(s.blade / 25) > before) ctx.emit(4, '🗡️ Your blade hums. Tap damage ×2');
-          api.pop(e, '+' + n);
+          const n = buyN(api.mode(), BLADE, BG, s.blade, s.gold);
+          if (buyBlade(s, n, ctx)) api.pop(e, '+' + n);
           return;
         }
-        const h = HEROES.find(x => x.id === id), had = s.heroes[id] || 0;
-        const n = buyN(api.mode(), h.cost, G, had, s.gold), c = costOf(h.cost, G, had, n);
-        if (s.gold < c) return;
-        s.gold -= c;
-        s.heroes[id] = had + n;
-        const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
-        if (!had) ctx.emit(6, `${h.icon} ${h.name} joins your party`);
-        if (steps) { ctx.emit(4 * steps, `${h.icon} ${h.name} grows stronger. Damage ×${2 ** steps}`); api.burst(e, ['#ffb454', '#ff5d73', '#fff']); }
-        api.pop(e, '+' + n);
+        const h = HEROES.find(x => x.id === id), n = buyN(api.mode(), h.cost, G, s.heroes[id] || 0, s.gold), r = buyHero(s, h, n, ctx);
+        if (r === 2) api.burst(e, ['#ffb454', '#ff5d73', '#fff']);
+        if (r) api.pop(e, '+' + n);
       }
     };
 
@@ -284,7 +319,7 @@ const game = {
     root.innerHTML = `<div data-k="ups"></div>`;
     const ul = upgradeList(root.firstElementChild, {
       title: 'Armory', items: UPGRADES, owned: u => s.ups[u.id], cash: () => s.gold, cur: '🪙',
-      onBuy: (u, e) => { s.gold -= u.cost; s.ups[u.id] = true; api.ctx().emit(3, `${u.icon} ${u.name}: ${u.desc}`); api.burst(e, ['#ffb454', '#fff']); },
+      onBuy: (u, e) => { if (buyUp(s, u, api.ctx())) api.burst(e, ['#ffb454', '#fff']); },
     });
     return { update: ul.update };
   },

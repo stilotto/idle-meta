@@ -1,6 +1,6 @@
 // Just Keep Digging: a self-aware digging game. Deeper ground is harder but pays more.
 import { fmt, costOf, stepMult, nextStep, buyN, modeLabel, setText, toggle, show, pick, restartAnim } from '../util.js';
-import { upgradeList, revealCount, simulate } from './common.js';
+import { upgradeList, revealCount, simulate, pickBuy, buysPer } from './common.js';
 import { ART } from '../art.js';
 
 const CREW = [
@@ -100,6 +100,23 @@ function dig(s, pw, ctx) {
     }
   }
 }
+function hireCrew(s, c, n, ctx) {
+  const had = s.crew[c.id] || 0, cost = costOf(c.cost, G, had, n);
+  if (s.cash < cost) return 0;
+  s.cash -= cost;
+  s.crew[c.id] = had + n;
+  const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
+  if (!had) ctx.emit(6, `${c.icon} Hired: ${c.name}. ${c.quip}`);
+  if (steps) ctx.emit(4 * steps, `${c.icon} ${c.name} milestone! Power ×${2 ** steps}`);
+  return steps ? 2 : 1;
+}
+function buyUp(s, u, ctx) {
+  if (s.cash < u.cost || s.ups[u.id]) return false;
+  s.cash -= u.cost;
+  s.ups[u.id] = true;
+  ctx.emit(3, `${u.icon} ${u.name}: ${u.desc}`);
+  return true;
+}
 const gainOf = (s, pm) => (s.runMax >= 400 ? Math.floor((s.runMax / 400) ** 1.5 * pm) : 0);
 
 const game = {
@@ -126,6 +143,24 @@ const game = {
     if (pw > 0) dig(s, pw * dt, ctx);
   },
 
+  autopilot(s, ctx, a) {
+    if (!power(s, ctx)) dig(s, tapPow(s, ctx) * (1 + 4 * a.q), ctx);
+    for (let k = buysPer(a.q); k > 0; k--) {
+      const u = a.ups && UPGRADES.find(x => !s.ups[x.id] && x.target !== 'tap' && s.cash >= x.cost);
+      if (u) { buyUp(s, u, ctx); continue; }
+      const reveal = revealCount(CREW, x => s.crew[x.id]);
+      const opts = CREW.slice(0, reveal + 1).map(x => {
+        const n = s.crew[x.id] || 0;
+        return { x, cost: costOf(x.cost, G, n, 1), gain: x.pow * upX(s, x.id) * ((n + 1) * stepMult(n + 1) - n * stepMult(n)) };
+      }).filter(o => o.cost <= s.cash);
+      const o = pickBuy(opts, a.q);
+      if (!o) break;
+      hireCrew(s, o.x, 1, ctx);
+    }
+  },
+  score: s => s.depth,
+  scoreLabel: 'depth',
+
   grant(s, sec, ctx) { const x = Math.max(income(s, ctx), 1) * sec; earn(s, x); return x; },
   warp(s, sec, ctx) {
     const before = s.cash;
@@ -137,7 +172,7 @@ const game = {
     return {
       stat: `⛏️ ${fmt(s.depth)} m`,
       sub: `${layerAt(Math.floor(s.depth / PER))[0]} · 💰 ${fmt(income(s, ctx))}/s`,
-      alert: power(s, ctx) ? '' : 'Nobody is digging. Hire a crew!',
+      alert: power(s, ctx) || ctx.auto ? '' : 'Nobody is digging. Hire a crew!',
     };
   },
 
@@ -213,15 +248,10 @@ const game = {
           api.burst(e, ['#9fd8ff', '#d36bff', '#fff']);
         }
       } else if (act === 'hire') {
-        const c = CREW.find(x => x.id === b.closest('[data-c]').dataset.c), had = s.crew[c.id] || 0;
-        const n = buyN(api.mode(), c.cost, G, had, s.cash), cost = costOf(c.cost, G, had, n);
-        if (s.cash < cost) return;
-        s.cash -= cost;
-        s.crew[c.id] = had + n;
-        const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
-        if (!had) ctx.emit(6, `${c.icon} Hired: ${c.name}. ${c.quip}`);
-        if (steps) { ctx.emit(4 * steps, `${c.icon} ${c.name} milestone! Power ×${2 ** steps}`); api.burst(e, ['#ffd23f', '#fff']); }
-        api.pop(e, '+' + n);
+        const c = CREW.find(x => x.id === b.closest('[data-c]').dataset.c);
+        const n = buyN(api.mode(), c.cost, G, s.crew[c.id] || 0, s.cash), r = hireCrew(s, c, n, ctx);
+        if (r === 2) api.burst(e, ['#ffd23f', '#fff']);
+        if (r) api.pop(e, '+' + n);
       }
     };
 
@@ -263,7 +293,7 @@ const game = {
     root.innerHTML = `<div></div>`;
     const ul = upgradeList(root.firstElementChild, {
       title: 'Tools', items: UPGRADES, owned: u => s.ups[u.id], cash: () => s.cash, cur: '💰',
-      onBuy: (u, e) => { s.cash -= u.cost; s.ups[u.id] = true; api.ctx().emit(3, `${u.icon} ${u.name}: ${u.desc}`); api.burst(e, ['#ffd23f', '#fff']); },
+      onBuy: (u, e) => { if (buyUp(s, u, api.ctx())) api.burst(e, ['#ffd23f', '#fff']); },
     });
     return { update: ul.update };
   },

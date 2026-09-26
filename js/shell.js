@@ -87,7 +87,7 @@ export function shellUpdate() {
   const g = S.st.games[cur.id], now = Date.now();
   setText(cur.gems, fmt(g.gems));
   setText(cur.mult, `×${fmt(D.gameMult(S.st, cur.id, now, true))} speed`);
-  setText(cur.boost, g.boostUntil > now ? ` · 🚀 ${fmtTime((g.boostUntil - now) / 1000)}` : '');
+  setText(cur.boost, (g.boostUntil > now ? ` · 🚀 ${fmtTime((g.boostUntil - now) / 1000)}` : '') + (g.auto ? ' · 🤖 paused while you play' : ''));
   show(cur.chest, g.chestAt <= now);
   cur.view?.update();
 }
@@ -160,7 +160,7 @@ function mountShop(body, id) {
       <div class="row" data-i="${it.id}">
         <div class="row-icon">${it.icon}</div>
         <div class="row-mid"><div class="row-name">${it.name}</div><div class="row-sub">${it.desc}</div></div>
-        <button class="buy gem" data-buy="${it.id}"><b>💎 ${D.gemPrice(st, it.price)}</b></button>
+        <button class="buy gem" data-buy="${it.id}"><b>💎 ${D.gemPrice(st, it.price, id)}</b></button>
       </div>`).join('')}</div>
     <div class="sec-h">Get gems <small>paid from your real-life wallet</small></div>
     <div class="packs">${D.PACKS.map(([p, n], i) => `<button class="pack" data-pack="${i}"><span>${'💎'.repeat(i + 1)}</span><b>${fmt(n * (D.has(st, 'h2') ? 1.25 : 1))} gems</b><em>${usd(p)}</em>${i === 3 ? '<i>Best value!</i>' : ''}</button>`).join('')}</div>
@@ -169,7 +169,7 @@ function mountShop(body, id) {
   body.onclick = e => {
     const b = e.target.closest('[data-buy]'), pk = e.target.closest('[data-pack]');
     if (b) {
-      const it = items.find(x => x.id === b.dataset.buy), price = D.gemPrice(st, it.price);
+      const it = items.find(x => x.id === b.dataset.buy), price = D.gemPrice(st, it.price, id);
       if (g.gems < price || (it.once && g[it.id])) return;
       g.gems -= price;
       const now = Date.now();
@@ -204,7 +204,7 @@ function mountShop(body, id) {
       setText(gemsEl, fmt(g.gems));
       for (const { it, el } of btns) {
         const owned = it.once && g[it.id];
-        toggle(el, 'off', owned || g.gems < D.gemPrice(st, it.price));
+        toggle(el, 'off', owned || g.gems < D.gemPrice(st, it.price, id));
         if (owned) setText(el, 'Owned ✓');
       }
       const b = st.meta.budget[id] || 0;

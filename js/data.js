@@ -9,6 +9,7 @@ export const BRANCHES = [
   { name: 'Hustle', color: '#3ddc84' },
   { name: 'Idle', color: '#c38bff' },
   { name: 'Luck', color: '#ffcc4d' },
+  { name: 'Auto', color: '#ff8a5c' },
 ];
 
 export const RESEARCH = [
@@ -32,7 +33,12 @@ export const RESEARCH = [
   { id: 'l3', br: 3, t: 2, req: ['l2'], icon: '⏱️', name: 'Speedrunner', desc: 'Every prestige pays +25% more.', cost: 3 },
   { id: 'l4', br: 3, t: 3, req: ['l3'], icon: '📚', name: 'Completionist', desc: '+50% XP from everything.', cost: 5 },
   { id: 'l5', br: 3, t: 4, req: ['l4'], icon: '✨', name: 'Golden Touch', desc: 'Legendary odds ×2 and every loot reward ×2.', cost: 8 },
-  { id: 'cap', br: 1.5, t: 5, req: ['f5', 'h5', 'i5', 'l5'], icon: '🌳', name: 'Touch Grass', desc: 'Perspective, at last. Every game ×2, forever.', cost: 20 },
+  { id: 'a1', br: 4, t: 0, icon: '🧠', name: 'Smart Buying', desc: 'Autopilots play smarter: +25% skill.', cost: 1 },
+  { id: 'a2', br: 4, t: 1, req: ['a1'], icon: '🛒', name: 'Upgrade Hunter', desc: 'Autopilots also buy one-time upgrades.', cost: 2 },
+  { id: 'a3', br: 4, t: 2, req: ['a2'], icon: '📜', name: 'Scripted Prestige', desc: 'Unlocks auto-prestige on each game card.', cost: 3 },
+  { id: 'a4', br: 4, t: 3, req: ['a3'], icon: '⏺️', name: 'Macro Recorder', desc: 'Autopilots act twice as often.', cost: 5 },
+  { id: 'a5', br: 4, t: 4, req: ['a4'], icon: '🦾', name: 'Bot Farm', desc: 'Autopilots always play at 100% skill.', cost: 8 },
+  { id: 'cap', br: 2, t: 5, req: ['f5', 'h5', 'i5', 'l5', 'a5'], icon: '🌳', name: 'Touch Grass', desc: 'Perspective, at last. Every game ×2, forever.', cost: 20 },
 ];
 export const canResearch = (st, r) => !has(st, r.id) && (r.req || []).every(q => has(st, q));
 
@@ -46,7 +52,8 @@ export const GEAR = [
 export const gearCost = (st, it) => Math.ceil(it.base * it.g ** (st.meta.gear[it.id] || 0));
 
 // ---- Focus: the attention budget ----
-export const focusCap = st => 100 + (has(st, 'f1') ? 20 : 0) + (has(st, 'f4') ? 40 : 0) + 10 * (st.meta.gear.chair || 0);
+export const dayOf = st => { const d = st.meta.day; return { work: d.work, game: d.game, sleep: 24 - d.work - d.game }; };
+export const focusCap = st => (dayOf(st).game / 8) * (100 + (has(st, 'f1') ? 20 : 0) + (has(st, 'f4') ? 40 : 0) + 10 * (st.meta.gear.chair || 0));
 export const switchPenalty = st => (has(st, 'f2') ? 0.07 : 0.12);
 export const effFocus = st => focusCap(st) * Math.max(0.4, 1 - switchPenalty(st) * Math.max(0, installed(st).length - 1));
 export const focusPts = (st, id) => (effFocus(st) * (st.meta.alloc[id] || 0)) / 100;
@@ -72,22 +79,25 @@ export function multParts(st, id, now, open) {
   const a = Object.keys(m.ach).length;
   if (a) parts.push(['🏆 Trophies', 1 + 0.02 * a]);
   if (has(st, 'cap')) parts.push(['🌳 Touch grass', 2]);
+  const sm = sanityMult(st);
+  if (sm !== 1) parts.push([sm > 1 ? '😌 Well rested' : '😵 Burnt out', sm]);
+  if (eventOn(st, 'focus', id) && (m.alloc[id] || 0) >= 40) parts.push(['🎪 Live event', 3]);
   if (open) parts.push(['👀 Playing now', 2]);
   return parts;
 }
 export const gameMult = (st, id, now, open) => multParts(st, id, now, open).reduce((a, [, v]) => a * v, 1);
 
 // ---- money ----
-export const salary = st => 25 * (has(st, 'h1') ? 1.5 : 1) * (has(st, 'h5') ? 2 : 1);
+export const salary = st => 25 * (dayOf(st).work / 8) * (has(st, 'h1') ? 1.5 : 1) * (has(st, 'h5') ? 2 : 1);
 export const payEvery = st => (has(st, 'h3') ? 90 : 120);
 export const gemsPerDollar = st => (has(st, 'h2') ? 12.5 : 10);
-export const gemPrice = (st, n) => Math.ceil(n * (has(st, 'h4') ? 0.75 : 1));
+export const gemPrice = (st, n, id) => Math.ceil(n * (has(st, 'h4') ? 0.75 : 1) * (eventOn(st, 'sale', id) ? 0.5 : 1));
 export const BUDGET_STEPS = [0, 1, 2, 3, 5, 8, 10, 15, 20, 25, 35, 50, 75, 100];
 export const PACKS = [[4.99, 50], [9.99, 110], [19.99, 240], [49.99, 650]];
 
 // ---- idle & luck ----
 export const offlineCap = st => 7200 + (has(st, 'i1') ? 7200 : 0) + (has(st, 'i4') ? 21600 : 0) + 3600 * (st.meta.gear.phone || 0);
-export const offlineEff = st => Math.min(1, 0.5 + (has(st, 'i2') ? 0.25 : 0) + (has(st, 'i5') ? 0.25 : 0) + 0.05 * (st.meta.gear.charger || 0));
+export const offlineEff = st => Math.max(0.2, Math.min(1, 0.5 + 0.04 * (dayOf(st).sleep - 8) + (has(st, 'i2') ? 0.25 : 0) + (has(st, 'i5') ? 0.25 : 0) + 0.05 * (st.meta.gear.charger || 0)));
 export const lootEvery = st => 75 / ((has(st, 'l1') ? 1.3 : 1) * (1 + 0.1 * (st.meta.gear.charm || 0)));
 export const autoTaps = st => (has(st, 'i3') ? 2 : 0);
 export const prestigeMult = st => (has(st, 'l3') ? 1.25 : 1);
@@ -97,8 +107,38 @@ export const varietyBonus = st => 0.25 * Math.max(0, installed(st).length - 1);
 export function xpMult(st, id) {
   let x = (1 + varietyBonus(st)) * (has(st, 'l4') ? 1.5 : 1);
   if (id && st.games[id] && !st.games[id].spent) x *= 1.5;
+  if (id && eventOn(st, 'xp', id)) x *= 2;
   return x;
 }
+// ---- life: sanity ----
+// Sanity drifts down when you under-sleep or over-game, and recovers otherwise.
+export function sanityRate(st) {
+  const d = dayOf(st);
+  let r = 0;
+  if (d.sleep < 7) r -= (7 - d.sleep) * 0.04;
+  if (d.game > 10) r -= (d.game - 10) * 0.03;
+  return r < 0 ? r : 0.1 + Math.max(0, d.sleep - 8) * 0.05;
+}
+export function sanityMult(st) {
+  const s = st.meta.sanity;
+  return s >= 80 ? 1.1 : s >= 40 ? 1 : 0.4 + s / 66;
+}
+
+// ---- autopilot ----
+export function autoSkill(st, id) {
+  if (has(st, 'a5')) return 1;
+  return Math.min(1, 0.15 + focusPts(st, id) / 50 + (has(st, 'a1') ? 0.25 : 0));
+}
+export const autoEvery = (st, id) => (1 + 9 * (1 - autoSkill(st, id))) / (has(st, 'a4') ? 2 : 1);
+
+// ---- live events ----
+export const EVENTS = {
+  xp: { icon: '✨', name: 'Double XP weekend', desc: 'All XP from this game ×2', len: 240 },
+  focus: { icon: '🎪', name: 'Limited-time event', desc: '×3 speed if it has 40%+ Focus', len: 300 },
+  sale: { icon: '🏷️', name: 'Gem sale', desc: 'Its gem shop is 50% off', len: 300 },
+};
+export const eventOn = (st, type, id) => st.meta.events.some(e => e.type === type && e.id === id && e.until > Date.now());
+
 export const xpNeed = L => Math.floor(30 * 1.6 ** (L - 1));
 
 export const RARITY = [
@@ -149,11 +189,12 @@ export function newState() {
   return {
     v: 1, lastSeen: Date.now(), buyMode: 1,
     meta: {
-      level: 1, xp: 0, insight: 0, wallet: 20, payT: 0, lootT: 30,
+      level: 1, xp: 0, insight: 0, wallet: 20, payT: 0, lootT: 30, histT: 0, eventT: 180,
+      day: { work: 8, game: 8 }, sanity: 100, events: [],
       alloc: {}, budget: {}, research: {}, gear: {}, ach: {}, relics: 0, streak: { day: '', n: 0 },
       stats: { taps: 0, loot: 0, legend: 0, prestiges: 0, spent: 0, paydays: 0, away: false },
     },
     games: {},
   };
 }
-export const newGame = def => ({ installed: true, gems: 0, boostUntil: 0, starter: false, vip: false, spent: 0, prestiges: 0, chestAt: Date.now() + 90000, s: def.init() });
+export const newGame = def => ({ installed: true, gems: 0, boostUntil: 0, starter: false, vip: false, spent: 0, prestiges: 0, chestAt: Date.now() + 90000, auto: true, autoT: 0, autoPrestige: false, hist: [], s: def.init() });

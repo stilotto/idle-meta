@@ -1,6 +1,6 @@
 // Sunnyside Acres: a cozy farming tycoon. Fields run on cycles; farmhands automate them.
 import { fmt, costOf, stepMult, nextStep, buyN, modeLabel, setText, toggle, fill, show, rand } from '../util.js';
-import { upgradeList, revealCount } from './common.js';
+import { upgradeList, revealCount, pickBuy, buysPer } from './common.js';
 import { ART } from '../art.js';
 
 const FIELDS = [
@@ -41,6 +41,30 @@ function rateOf(s, ctx, managedOnly) {
   return r;
 }
 function earn(s, x) { s.coins += x; s.life += x; }
+function buyField(s, f, n, ctx) {
+  const had = s.owned[f.id] || 0, c = costOf(f.cost, f.g, had, n);
+  if (s.coins < c) return 0;
+  s.coins -= c;
+  s.owned[f.id] = had + n;
+  const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
+  if (!had) ctx.emit(6, `${f.icon} New field: ${f.name}!`);
+  if (steps) ctx.emit(4 * steps, `${f.icon} ${f.name} milestone! Profit ×${2 ** steps}`);
+  return steps ? 2 : 1;
+}
+function hire(s, f, ctx) {
+  if (s.coins < f.hand || s.hands[f.id]) return false;
+  s.coins -= f.hand;
+  s.hands[f.id] = true;
+  ctx.emit(8, `👒 A farmhand now runs the ${f.name}`);
+  return true;
+}
+function buyUp(s, u, ctx) {
+  if (s.coins < u.cost || s.ups[u.id]) return false;
+  s.coins -= u.cost;
+  s.ups[u.id] = true;
+  ctx.emit(3, `${u.icon} ${u.name}: ${u.desc}`);
+  return true;
+}
 const potential = (s, pm) => Math.floor(Math.sqrt(s.life / 3e9) * pm);
 
 const game = {
@@ -83,6 +107,26 @@ const game = {
     if (ctx.open) s.cloverT -= dt;
   },
 
+  autopilot(s, ctx, a) {
+    for (const f of FIELDS) if (s.owned[f.id] && !s.hands[f.id]) s.running[f.id] = true;
+    for (let k = buysPer(a.q); k > 0; k--) {
+      const f = FIELDS.find(x => s.owned[x.id] && !s.hands[x.id] && s.coins >= x.hand);
+      if (f) { hire(s, f, ctx); continue; }
+      const u = a.ups && UPGRADES.find(x => !s.ups[x.id] && s.coins >= x.cost);
+      if (u) { buyUp(s, u, ctx); continue; }
+      const reveal = revealCount(FIELDS, x => s.owned[x.id]);
+      const opts = FIELDS.slice(0, reveal + 1).map(x => {
+        const n = s.owned[x.id] || 0;
+        return { x, cost: costOf(x.cost, x.g, n, 1), gain: (x.pay / x.time) * upMult(s, x.id) * ((n + 1) * stepMult(n + 1) - n * stepMult(n)) };
+      }).filter(o => o.cost <= s.coins);
+      const o = pickBuy(opts, a.q);
+      if (!o) break;
+      buyField(s, o.x, 1, ctx);
+    }
+  },
+  score: s => Math.log10(1 + rateOf(s, { mult: 1, now: 0 }, false)),
+  scoreLabel: 'income',
+
   grant(s, sec, ctx) { const x = Math.max(rateOf(s, ctx, false), 1) * sec; earn(s, x); return x; },
   warp(s, sec, ctx) { return game.grant(s, sec, ctx); },
 
@@ -91,7 +135,7 @@ const game = {
     return {
       stat: `🪙 ${fmt(rateOf(s, ctx, true))}/s`,
       sub: `${fmt(s.coins)} coins · ${FIELDS.filter(f => s.owned[f.id]).length} fields`,
-      alert: idle && !ctx.autoTaps ? `${idle} field${idle > 1 ? 's' : ''} need${idle > 1 ? '' : 's'} a farmhand` : '',
+      alert: idle && !ctx.autoTaps && !ctx.auto ? `${idle} field${idle > 1 ? 's' : ''} need${idle > 1 ? '' : 's'} a farmhand` : '',
     };
   },
 
@@ -145,14 +189,9 @@ const game = {
       else if (act === 'run') {
         if (s.owned[f.id] && !s.running[f.id] && !s.hands[f.id]) { s.running[f.id] = true; api.tap(e, f.icon); }
       } else if (act === 'buy') {
-        const had = s.owned[f.id] || 0, n = buyN(api.mode(), f.cost, f.g, had, s.coins), c = costOf(f.cost, f.g, had, n);
-        if (s.coins < c) return;
-        s.coins -= c;
-        s.owned[f.id] = had + n;
-        const steps = Math.round(Math.log2(stepMult(had + n) / stepMult(had)));
-        if (!had) ctx.emit(6, `${f.icon} New field: ${f.name}!`);
-        if (steps) { ctx.emit(4 * steps, `${f.icon} ${f.name} milestone! Profit ×${2 ** steps}`); api.burst(e); }
-        api.pop(e, '+' + n);
+        const n = buyN(api.mode(), f.cost, f.g, s.owned[f.id] || 0, s.coins), r = buyField(s, f, n, ctx);
+        if (r === 2) api.burst(e);
+        if (r) api.pop(e, '+' + n);
       } else if (act === 'clover') {
         clover.hidden = true;
         s.cloverT = rand(45, 90);
@@ -218,17 +257,14 @@ const game = {
       const b = e.target.closest('[data-h]');
       if (!b) return;
       const f = FIELDS.find(x => x.id === b.dataset.h);
-      if (s.coins < f.hand || s.hands[f.id]) return;
-      s.coins -= f.hand;
-      s.hands[f.id] = true;
-      api.ctx().emit(8, `👒 A farmhand now runs the ${f.name}`);
+      if (!hire(s, f, api.ctx())) return;
       api.burst(e);
       buildHands();
     };
     buildHands();
     const ul = upgradeList(root.querySelector('[data-k="ups"]'), {
       items: UPGRADES, owned: u => s.ups[u.id], cash: () => s.coins, cur: '🪙',
-      onBuy: (u, e) => { s.coins -= u.cost; s.ups[u.id] = true; api.ctx().emit(3, `${u.icon} ${u.name}: ${u.desc}`); api.burst(e); },
+      onBuy: (u, e) => { if (buyUp(s, u, api.ctx())) api.burst(e); },
     });
     return {
       update() {

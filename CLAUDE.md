@@ -7,6 +7,7 @@ home page.
 ## How it's built
 
 - Plain ES modules, no build step, no dependencies. Open `index.html` via any static server.
+- Games run themselves: each game module has an `autopilot(s, ctx, {q, ups})`; skill q comes from Focus (`data.js autoSkill`).
 - `js/main.js` boot + loop + nav, `js/core.js` state/save/XP/loot/offline,
   `js/data.js` meta rules (research, gear, trophies, formulas),
   `js/shell.js` the in-game overlay (tabs, prestige, gem shop),

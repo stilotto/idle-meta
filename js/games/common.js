@@ -41,3 +41,12 @@ export function revealCount(list, owned) {
   list.forEach((x, i) => { if (owned(x)) n = i + 1; });
   return n;
 }
+
+// Autopilot choice: with probability q take the best value, otherwise an impulse buy.
+export function pickBuy(opts, q) {
+  if (!opts.length) return null;
+  if (Math.random() < q) return opts.reduce((a, b) => (b.gain / b.cost > a.gain / a.cost ? b : a));
+  return opts[Math.floor(Math.random() * opts.length)];
+}
+// How many purchases an autopilot makes per decision.
+export const buysPer = q => 1 + Math.floor(q * 6);

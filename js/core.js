@@ -2,7 +2,7 @@
 import * as D from './data.js';
 import { GAMES, BY_ID } from './games/index.js';
 import { CRATE } from './art.js';
-import { toast, modal, burst, fmt, usd, fmtTime, rand, pick, restartAnim } from './util.js';
+import { toast, modal, burst, fmt, usd, fmtTime, rand, pick, restartAnim, clamp } from './util.js';
 
 export const S = { st: null, openId: null, hold: null, onInstall: null, onOpenGame: null };
 const KEY = 'idle-hands-save-v1';
@@ -205,7 +205,7 @@ export function spawnDrop() {
 }
 
 // ---- prestige ----
-export function doPrestige(id) {
+export function doPrestige(id, auto, quiet) {
   const st = S.st, def = BY_ID[id], g = st.games[id], P = def.prestige;
   const gain = def.reset(g.s, D.prestigeMult(st));
   if (gain < 1) return;
@@ -213,6 +213,11 @@ export function doPrestige(id) {
   st.meta.stats.prestiges++;
   const ins = 2 + Math.floor(Math.log2(gain + 1));
   st.meta.insight += ins;
+  if (auto) {
+    addXP(20 + 6 * Math.sqrt(gain), id, quiet);
+    if (!quiet) toast(`📜 Auto-${P.one}: ${def.name} +${fmt(gain)} ${P.icon} · +${ins} 💡`);
+    return;
+  }
   modal((card, close) => {
     card.classList.add('prest-done', 'theme-' + def.theme);
     card.innerHTML = `
@@ -240,9 +245,45 @@ export function checkAch() {
 }
 
 // ---- time ----
+// One game's slice of time, including its autopilot and auto-prestige.
+function gameTick(def, dt, now, quiet) {
+  const st = S.st, g = st.games[def.id], open = S.openId === def.id;
+  const ctx = ctxFor(def.id, now, open, quiet);
+  def.tick(g.s, dt, ctx);
+  if (g.auto && !open) {
+    g.autoT += dt;
+    const every = D.autoEvery(st, def.id);
+    if (g.autoT >= every) {
+      g.autoT = 0;
+      def.autopilot(g.s, ctx, { q: D.autoSkill(st, def.id), ups: D.has(st, 'a2') });
+    }
+  }
+  if (g.autoPrestige && !open && D.has(st, 'a3') && def.gain(g.s, ctx.pm) >= Math.max(1, def.owned(g.s) * 0.5)) doPrestige(def.id, true, quiet);
+}
+
+function sample(st) {
+  for (const def of D.installed(st)) {
+    const g = st.games[def.id];
+    g.hist.push(Math.round(def.score(g.s) * 100) / 100);
+    if (g.hist.length > 40) g.hist.shift();
+  }
+}
+
+function spawnEvent(st) {
+  const def = pick(D.installed(st)), type = pick(Object.keys(D.EVENTS)), E = D.EVENTS[type];
+  st.meta.events.push({ type, id: def.id, until: Date.now() + E.len * 1000 });
+  toast(`${E.icon} <b>${def.name}</b>: ${E.name}! ${E.desc}.`, 'ach');
+}
+
 export function step(dt, now) {
   const st = S.st, m = st.meta;
-  for (const def of D.installed(st)) def.tick(st.games[def.id].s, dt, ctxFor(def.id, now, S.openId === def.id, false));
+  for (const def of D.installed(st)) gameTick(def, dt, now, false);
+  m.sanity = clamp(m.sanity + D.sanityRate(st) * dt, 0, 100);
+  m.histT += dt;
+  if (m.histT >= 30) { m.histT = 0; sample(st); }
+  m.events = m.events.filter(e => e.until > now);
+  m.eventT -= dt;
+  if (m.eventT <= 0) { m.eventT = rand(240, 420); if (!m.events.length && document.visibilityState === 'visible') spawnEvent(st); }
   m.payT += dt;
   if (m.payT >= D.payEvery(st)) { m.payT -= D.payEvery(st); payday(false); }
   m.lootT -= dt;
@@ -253,14 +294,17 @@ export function catchUp(realSec, full) {
   const st = S.st, m = st.meta, defs = D.installed(st);
   const real = full ? realSec : Math.min(realSec, D.offlineCap(st));
   const eff = full ? 1 : D.offlineEff(st), sim = real * eff;
-  const before = defs.map(d => d.cash(st.games[d.id].s)), lv = m.level, wallet = m.wallet, gems = defs.map(d => st.games[d.id].gems);
+  const before = {}, gems = {}, lv = m.level, wallet = m.wallet;
+  for (const d of defs) { before[d.id] = d.cash(st.games[d.id].s); gems[d.id] = st.games[d.id].gems; }
   S.hold = [];
   const steps = Math.min(20000, Math.max(20, Math.ceil(sim)));
   const dt = sim / steps, t0 = Date.now() - real * 1000;
   for (let i = 0; i < steps; i++) {
     const now = t0 + (i / steps) * real * 1000;
-    for (const d of defs) d.tick(st.games[d.id].s, dt, ctxFor(d.id, now, false, true));
+    for (const d of D.installed(st)) gameTick(d, dt, now, true);
   }
+  m.sanity = clamp(m.sanity + (full ? D.sanityRate(st) : 0.1) * real, 0, 100);
+  sample(st);
   m.payT += real;
   let pays = 0;
   while (m.payT >= D.payEvery(st)) { m.payT -= D.payEvery(st); payday(true); pays++; }
@@ -275,7 +319,7 @@ export function catchUp(realSec, full) {
         <h2>You were away ${fmtTime(realSec)}</h2>
         <p class="muted">Your games kept going at ${Math.round(eff * 100)}% speed${realSec > real ? ` for the first ${fmtTime(real)} (your offline limit)` : ''}.</p>
         <div class="away-list">
-          ${defs.map((d, i) => `<div><span class="app-icon xs">${d.art}</span><b>${d.name}</b><em>+${fmt(d.cash(st.games[d.id].s) - before[i])} ${d.cur.icon}</em>${st.games[d.id].gems > gems[i] ? `<em>+${fmt(st.games[d.id].gems - gems[i])} 💎</em>` : ''}</div>`).join('')}
+          ${D.installed(st).map(d => `<div><span class="app-icon xs">${d.art}</span><b>${d.name}</b>${d.id in before ? '' : '<em>new!</em>'}<em>+${fmt(Math.max(0, d.cash(st.games[d.id].s) - (before[d.id] || 0)))} ${d.cur.icon}</em>${st.games[d.id].gems > (gems[d.id] || 0) ? `<em>+${fmt(st.games[d.id].gems - (gems[d.id] || 0))} 💎</em>` : ''}</div>`).join('')}
           ${pays ? `<div><span class="emo">💵</span><b>${pays} payday${pays > 1 ? 's' : ''}</b><em>${m.wallet >= wallet ? '+' : ''}${usd(m.wallet - wallet)}</em></div>` : ''}
           ${m.level > lv ? `<div><span class="emo">⭐</span><b>Level ${lv} → ${m.level}</b></div>` : ''}
         </div>

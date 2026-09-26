@@ -1,14 +1,14 @@
 // Boot, the main loop, the status bar and bottom navigation.
 import { S, load, save, step, catchUp, checkAch, dailyCheck } from './core.js';
 import { openGame, closeGame, shellUpdate } from './shell.js';
-import { mountHome, mountBudget, mountResearch, mountGear, mountTrophies } from './views.js';
+import { mountHome, mountLife, mountResearch, mountGear, mountTrophies } from './views.js';
 import * as D from './data.js';
 import { BY_ID } from './games/index.js';
 import { fmt, usd, setText, toggle, modal, toast } from './util.js';
 
 const TABS = [
   ['home', '📱', 'Home', root => mountHome(root, id => openGame(id))],
-  ['budget', '⚖️', 'Budget', mountBudget],
+  ['life', '🕒', 'Life', mountLife],
   ['research', '🧪', 'Research', mountResearch],
   ['gear', '🛒', 'Gear', mountGear],
   ['trophies', '🏆', 'Trophies', mountTrophies],
@@ -24,9 +24,9 @@ status.innerHTML = `
   <div class="st-main">
     <div class="st-row"><span class="st-title">Idle Meta</span><span class="st-xp" data-k="xp"></span></div>
     <div class="st-pills">
-      <button class="pill money" data-go="budget">💵 <b data-k="wallet"></b></button>
+      <button class="pill money" data-go="life">💵 <b data-k="wallet"></b></button>
       <button class="pill insight" data-go="research">💡 <b data-k="ins"></b></button>
-      <button class="pill focus" data-go="budget">⚡ <b data-k="focus"></b></button>
+      <button class="pill sanity" data-go="life">🧠 <b data-k="san"></b></button>
     </div>
   </div>`;
 const SK = n => status.querySelector(`[data-k="${n}"]`);
@@ -58,7 +58,8 @@ function updateStatus() {
   setText(SK('xp'), `${fmt(m.xp)} / ${fmt(need)} XP`);
   setText(SK('wallet'), usd(m.wallet));
   setText(SK('ins'), fmt(m.insight));
-  setText(SK('focus'), fmt(D.focusCap(S.st)));
+  setText(SK('san'), Math.round(m.sanity) + '%');
+  toggle(SK('san'), 'low', m.sanity < 40);
   const dots = nav.querySelectorAll('.dot');
   dots[2].hidden = !D.RESEARCH.some(r => D.canResearch(S.st, r) && m.insight >= r.cost);
   dots[3].hidden = !D.GEAR.some(it => (m.gear[it.id] || 0) < it.max && m.wallet >= D.gearCost(S.st, it));
@@ -83,8 +84,9 @@ if (fresh) {
       <h2>Idle Meta</h2>
       <p>You play idle games. Lots of them.</p>
       <ul>
-        <li>⚡ Split your <b>Focus</b> between games. More focus, faster game.</li>
-        <li>💵 Your day job pays you. Stay <b>free-to-play</b>, or spend on gems.</li>
+        <li>🤖 Your games <b>play themselves</b>. Pop in whenever you like.</li>
+        <li>⚡ Split your <b>Focus</b> between games: faster games, smarter autopilots.</li>
+        <li>🕒 Balance work, gaming and sleep. Stay <b>free-to-play</b>, or spend.</li>
         <li>🎁 Tap notifications for surprise loot.</li>
         <li>⭐ Level up to unlock new games and 🧪 research.</li>
       </ul>
