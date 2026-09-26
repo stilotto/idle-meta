@@ -572,3 +572,12 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; bord
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .legend .theme-farm { background: #7fd14f; } .legend .theme-rpg { background: #e0486a; } .legend .theme-dig { background: #ffd23f; }
 .legend b { color: var(--text); }
+
+/* ---------- open-all crates ---------- */
+.skip-all { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.skip-all input { width: 20px; height: 20px; accent-color: var(--xp); margin: 0; }
+.skip-all b { color: var(--insight); }
+.loot.summary .loot-rar { font-size: 24px; }
+.rar-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.rar-row span { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--c); border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.loot.summary .loot-lines { max-height: 46vh; overflow-y: auto; }

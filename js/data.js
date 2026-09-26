@@ -190,7 +190,7 @@ export function newState() {
     v: 1, lastSeen: Date.now(), buyMode: 1,
     meta: {
       level: 1, xp: 0, insight: 0, wallet: 20, payT: 0, lootT: 30, histT: 0, eventT: 180,
-      day: { work: 8, game: 8 }, sanity: 100, events: [],
+      day: { work: 8, game: 8 }, sanity: 100, events: [], openAll: false,
       alloc: {}, budget: {}, research: {}, gear: {}, ach: {}, relics: 0, streak: { day: '', n: 0 },
       stats: { taps: 0, loot: 0, legend: 0, prestiges: 0, spent: 0, paydays: 0, away: false },
     },

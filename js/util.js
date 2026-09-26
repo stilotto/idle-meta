@@ -111,6 +111,13 @@ export function toast(html, cls = '') {
 const queue = [];
 let current = null;
 export const modalOpen = () => !!current;
+// Pull every not-yet-shown modal of a kind out of the queue (used to batch-open crates).
+export function takeQueued(kind) {
+  const out = [];
+  for (let i = queue.length - 1; i >= 0; i--) if (queue[i].opts.kind === kind) out.unshift(queue.splice(i, 1)[0].opts);
+  return out;
+}
+export const countQueued = kind => queue.filter(q => q.opts.kind === kind).length;
 
 export function modal(build, opts = {}) {
   queue.push({ build, opts });

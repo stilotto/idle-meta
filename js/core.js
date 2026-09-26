@@ -2,7 +2,7 @@
 import * as D from './data.js';
 import { GAMES, BY_ID } from './games/index.js';
 import { CRATE } from './art.js';
-import { toast, modal, burst, fmt, usd, fmtTime, rand, pick, restartAnim, clamp } from './util.js';
+import { toast, modal, takeQueued, countQueued, burst, fmt, usd, fmtTime, rand, pick, restartAnim, clamp } from './util.js';
 
 export const S = { st: null, openId: null, hold: null, onInstall: null, onOpenGame: null };
 const KEY = 'idle-hands-save-v1';
@@ -146,32 +146,67 @@ export function rollLoot(targetId, floor = 0) {
     apply() {
       const m = st.meta, now = Date.now(), out = [];
       const ctx = ctxFor(id, now, false, true);
-      if (type === 'burst') { const x = def.grant(g.s, amt * LM, ctx); out.push([def.cur.icon, `+${fmt(x)} ${def.cur.name} in ${def.name}`]); }
-      if (type === 'gems') { g.gems += amt * LM; out.push(['💎', `+${amt * LM} gems for ${def.name}`]); }
-      if (type === 'cash') { m.wallet = cents(m.wallet + amt * LM); out.push(['💵', `+${usd(amt * LM)} found in an old jacket`]); }
-      if (type === 'xp') { const x = D.xpNeed(m.level) * amt * LM; out.push(['✨', `+${fmt(x)} XP`]); later(() => addXP(x / D.xpMult(st, null))); }
-      if (type === 'warp') { const x = def.warp(g.s, amt * LM, ctx); out.push(['⏩', `${fmtTime(amt * LM)} time warp in ${def.name}: +${fmt(x)} ${def.cur.name}`]); }
-      if (type === 'insight') { m.insight += amt * LM; out.push(['💡', `+${amt * LM} Insight`]); }
-      if (type === 'boost') { g.boostUntil = Math.max(now, g.boostUntil) + amt * 1000 * LM; out.push(['🚀', `2× speed in ${def.name} for ${fmtTime(amt * LM)}`]); }
-      if (r === 3) { m.relics++; m.stats.legend++; out.push(['🏺', 'Lucky relic: +5% speed in every game, forever']); }
+      const add = (icon, key, n, text) => out.push({ icon, key, n, text });
+      if (type === 'burst') add(def.cur.icon, 'cur' + id, def.grant(g.s, amt * LM, ctx), n => `+${fmt(n)} ${def.cur.name} in ${def.name}`);
+      if (type === 'gems') { g.gems += amt * LM; add('💎', 'gems' + id, amt * LM, n => `+${fmt(n)} gems for ${def.name}`); }
+      if (type === 'cash') { m.wallet = cents(m.wallet + amt * LM); add('💵', 'cash', amt * LM, n => `+${usd(n)} found in old jackets`); }
+      if (type === 'xp') { const x = D.xpNeed(m.level) * amt * LM; add('✨', 'xp', x, n => `+${fmt(n)} XP`); later(() => addXP(x / D.xpMult(st, null))); }
+      if (type === 'warp') { const x = def.warp(g.s, amt * LM, ctx); add('⏩', 'warp' + id, amt * LM, n => `${fmtTime(n)} of time warp in ${def.name}`); add(def.cur.icon, 'cur' + id, x, n => `+${fmt(n)} ${def.cur.name} in ${def.name}`); }
+      if (type === 'insight') { m.insight += amt * LM; add('💡', 'insight', amt * LM, n => `+${fmt(n)} Insight`); }
+      if (type === 'boost') { g.boostUntil = Math.max(now, g.boostUntil) + amt * 1000 * LM; add('🚀', 'boost' + id, amt * LM, n => `2× speed in ${def.name} for ${fmtTime(n)}`); }
+      if (r === 3) { m.relics++; m.stats.legend++; add('🏺', 'relic', 1, n => `${n > 1 ? n + ' lucky relics' : 'Lucky relic'}: +${5 * n}% speed in every game, forever`); }
       m.stats.loot++;
       return out;
     },
   };
 }
 
+const lineHTML = l => `<div class="loot-line"><span>${l.icon}</span><p>${l.text(l.n)}</p></div>`;
+
+// Open this crate plus every crate still waiting in line, and show one combined summary.
+function openAll(card, close, loot) {
+  const loots = [loot, ...takeQueued('loot').map(o => o.loot)];
+  const sums = new Map(), rar = [0, 0, 0, 0];
+  for (const l of loots) {
+    rar[l.rarity]++;
+    for (const e of l.apply()) {
+      const cur = sums.get(e.key);
+      if (cur) cur.n += e.n; else sums.set(e.key, { ...e });
+    }
+  }
+  const best = D.RARITY[rar.findLastIndex(n => n > 0)];
+  card.style.setProperty('--rar', best.color);
+  card.classList.add('opened', 'summary', 'r-' + best.id);
+  card.innerHTML = `
+    <div class="loot-glow"></div>
+    <div class="loot-rar">${loots.length} crate${loots.length > 1 ? 's' : ''} opened</div>
+    <div class="rar-row">${rar.map((n, i) => (n ? `<span style="--c:${D.RARITY[i].color}">${n} ${D.RARITY[i].name}</span>` : '')).join('')}</div>
+    <div class="loot-lines">${[...sums.values()].map(lineHTML).join('')}</div>
+    <button class="big-btn">Sweet</button>`;
+  card.querySelector('.big-btn').onclick = close;
+  const b = card.getBoundingClientRect();
+  burst(b.left + b.width / 2, b.top + 70, [best.color, '#fff', '#ffd84d'], 44);
+}
+
 export function openLoot(source, targetId, floor = 0) {
   const loot = rollLoot(targetId, floor), R = D.RARITY[loot.rarity];
   modal((card, close) => {
+    const m = S.st.meta, waiting = countQueued('loot');
     card.classList.add('loot');
     card.innerHTML = `
       <div class="loot-src">${source}</div>
       <button class="chest" aria-label="Open crate">${CRATE}</button>
-      <div class="loot-hint">Tap the crate to open it</div>
-      <div class="loot-pips"><i></i><i></i><i></i></div>`;
+      <div class="loot-hint">${m.openAll ? 'Tap to open everything' : 'Tap the crate to open it'}</div>
+      <div class="loot-pips"><i></i><i></i><i></i></div>
+      <label class="skip-all"><input type="checkbox" ${m.openAll ? 'checked' : ''}> Skip ahead: open all crates at once${waiting ? ` <b>(${waiting + 1} waiting)</b>` : ''}</label>`;
     const chest = card.querySelector('.chest'), pips = card.querySelectorAll('.loot-pips i');
+    card.querySelector('.skip-all input').onchange = e => {
+      m.openAll = e.target.checked;
+      if (m.openAll) openAll(card, close, loot);
+    };
     let taps = 0;
     chest.onclick = () => {
+      if (m.openAll) return openAll(card, close, loot);
       taps++;
       pips[taps - 1]?.classList.add('on');
       restartAnim(chest, 'shake');
@@ -182,13 +217,13 @@ export function openLoot(source, targetId, floor = 0) {
       card.innerHTML = `
         <div class="loot-glow"></div>
         <div class="loot-rar">${R.name}</div>
-        <div class="loot-lines">${lines.map(([i, t]) => `<div class="loot-line"><span>${i}</span><p>${t}</p></div>`).join('')}</div>
+        <div class="loot-lines">${lines.map(lineHTML).join('')}</div>
         <button class="big-btn">Sweet</button>`;
       card.querySelector('.big-btn').onclick = close;
       const b = card.getBoundingClientRect();
       burst(b.left + b.width / 2, b.top + 70, [R.color, '#fff', '#ffd84d'], loot.rarity >= 2 ? 44 : 20);
     };
-  }, { sticky: true });
+  }, { sticky: true, kind: 'loot', loot });
 }
 
 export function spawnDrop() {
