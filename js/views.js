@@ -207,6 +207,8 @@ export function mountResearch(root) {
     <div class="res-detail" data-k="detail"></div>`;
   const detail = root.querySelector('[data-k="detail"]');
   function renderDetail() {
+    detail.hidden = !sel;
+    if (!sel) return;
     const r = D.RESEARCH.find(x => x.id === sel), done = D.has(st, r.id), can = D.canResearch(st, r);
     const need = (r.req || []).filter(q => !D.has(st, q)).map(q => D.RESEARCH.find(x => x.id === q).name);
     detail.innerHTML = `
@@ -216,8 +218,8 @@ export function mountResearch(root) {
   }
   root.onclick = e => {
     const n = e.target.closest('[data-r]');
-    if (n) { sel = n.dataset.r; renderDetail(); return; }
-    if (e.target.closest('[data-act="buy"]')) {
+    if (n) { sel = n.dataset.r === sel ? null : n.dataset.r; renderDetail(); return; }
+    if (e.target.closest('[data-act="buy"]') && sel) {
       const r = D.RESEARCH.find(x => x.id === sel);
       if (!D.canResearch(st, r) || st.meta.insight < r.cost) return;
       st.meta.insight -= r.cost;
@@ -241,7 +243,7 @@ export function mountResearch(root) {
       }
       root.querySelectorAll('[data-l]').forEach(l => { const [, b] = l.dataset.l.split('>'); toggle(l, 'lit', D.has(st, l.dataset.l.split('>')[0]) && (D.has(st, b) || D.canResearch(st, D.RESEARCH.find(x => x.id === b)))); });
       const btn = detail.querySelector('button'), r = D.RESEARCH.find(x => x.id === sel);
-      if (btn && !D.has(st, sel)) { btn.disabled = !D.canResearch(st, r); toggle(btn, 'off', st.meta.insight < r.cost); }
+      if (sel && btn && !D.has(st, sel)) { btn.disabled = !D.canResearch(st, r); toggle(btn, 'off', st.meta.insight < r.cost); }
     },
   };
 }
