@@ -373,6 +373,7 @@ export function mountTrophies(root) {
   const st = S.st, m = st.meta;
   root.innerHTML = `
     <section class="res-head"><div><h2>Trophies</h2><p class="muted small">Each one is worth 💡 Insight and +2% speed in every game.</p></div><div class="ins-big gold">🏆 <b data-k="count"></b></div></section>
+    <div class="lvl-line"><span>⭐ Level <b data-k="lv"></b></span><span data-k="lvxp"></span></div>
     <div class="trophies">${D.ACH.map(a => `<div class="trophy" data-a="${a.id}"><span>${a.icon}</span><b>${a.name}</b><small>${a.desc}</small><i>+${a.insight} 💡</i></div>`).join('')}</div>
     <section class="panel">
       <div class="panel-h"><span>📊 Stats</span></div>
@@ -390,6 +391,8 @@ export function mountTrophies(root) {
   return {
     update() {
       setText(root.querySelector('[data-k="count"]'), `${Object.keys(m.ach).length}/${D.ACH.length}`);
+      setText(root.querySelector('[data-k="lv"]'), String(m.level));
+      setText(root.querySelector('[data-k="lvxp"]'), `${fmt(m.xp)} / ${fmt(D.xpNeed(m.level))} XP to level ${m.level + 1}`);
       D.ACH.forEach(a => toggle(root.querySelector(`[data-a="${a.id}"]`), 'got', !!m.ach[a.id]));
       const s = m.stats, rows = [
         ['Level', m.level], ['Taps', fmt(s.taps)], ['Loot drops opened', s.loot], ['Legendaries', s.legend],

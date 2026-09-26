@@ -581,3 +581,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; bord
 .rar-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .rar-row span { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--c); border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .loot.summary .loot-lines { max-height: 46vh; overflow-y: auto; }
+
+.lvl-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px; border-radius: 14px; background: rgba(195, 139, 255, .12); border: 1px solid rgba(195, 139, 255, .35); font-size: 14px; }
+.lvl-line b { color: var(--xp); font-size: 16px; }
+.lvl-line span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
