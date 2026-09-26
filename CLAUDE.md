@@ -16,4 +16,4 @@ home page.
   (init, tick, grant, warp, card, gain/need/reset, mountPlay, mountUp) and add it to `games/index.js`.
 - Save lives in localStorage key `idle-hands-save-v1`; `core.load()` merges new fields into old saves.
 - Must work at phone width and honor prefers-reduced-motion. Google Fonts only.
-- Push straight to `main`.
+- Run `./bump.sh` before each commit (cache-busts every module), then push straight to `main`.

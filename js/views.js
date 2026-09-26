@@ -71,8 +71,13 @@ export function mountHome(root, openGame) {
   const evEl = root.querySelector('[data-k="events"]');
   function update() {
     const now = Date.now(), active = m.events.filter(e => e.until > now);
-    const evHtml = active.map(e => { const E = D.EVENTS[e.type], d = BY_ID[e.id]; return `<div class="event"><span class="app-icon xs">${d.art}</span><div><b>${E.icon} ${E.name}</b><small>${d.name}: ${E.desc}</small></div><em>${fmtTime((e.until - now) / 1000)}</em></div>`; }).join('');
-    if (evEl.innerHTML !== evHtml) evEl.innerHTML = evHtml;
+    // Rebuild the event list only when the set of events changes; tick the countdowns in place.
+    const evKey = active.map(e => e.type + e.id + e.until).join('|');
+    if (evEl.dataset.key !== evKey) {
+      evEl.dataset.key = evKey;
+      evEl.innerHTML = active.map(e => { const E = D.EVENTS[e.type], d = BY_ID[e.id]; return `<div class="event"><span class="app-icon xs">${d.art}</span><div><b>${E.icon} ${E.name}</b><small>${d.name}: ${E.desc}</small></div><em></em></div>`; }).join('');
+    }
+    evEl.querySelectorAll('.event em').forEach((el, i) => setText(el, fmtTime((active[i].until - now) / 1000)));
     for (const c of cards) {
       const g = st.games[c.id], P = c.def.prestige;
       const ctx = { now, open: false, auto: g.auto, mult: D.gameMult(st, c.id, now, false), autoTaps: D.autoTaps(st), pm: D.prestigeMult(st) };

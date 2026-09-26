@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Fredoka:wght@500;700&family=Cinzel:wght@700;900&family=Bungee&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260926164426">
 </head>
 <body>
   <div id="app">
@@ -24,6 +24,21 @@
   <div id="toast-layer" aria-live="polite"></div>
   <div id="fx-layer" aria-hidden="true"></div>
   <noscript>Idle Meta needs JavaScript. Which is ironic, given how little you have to do.</noscript>
-  <script type="module" src="js/main.js"></script>
+  <script type="importmap">{
+  "imports": {
+    "./js/art.js": "./js/art.js?v=20260926164426",
+    "./js/core.js": "./js/core.js?v=20260926164426",
+    "./js/data.js": "./js/data.js?v=20260926164426",
+    "./js/games/common.js": "./js/games/common.js?v=20260926164426",
+    "./js/games/dig.js": "./js/games/dig.js?v=20260926164426",
+    "./js/games/farm.js": "./js/games/farm.js?v=20260926164426",
+    "./js/games/index.js": "./js/games/index.js?v=20260926164426",
+    "./js/games/rpg.js": "./js/games/rpg.js?v=20260926164426",
+    "./js/shell.js": "./js/shell.js?v=20260926164426",
+    "./js/util.js": "./js/util.js?v=20260926164426",
+    "./js/views.js": "./js/views.js?v=20260926164426"
+  }
+}</script>
+  <script type="module" src="js/main.js?v=20260926164426"></script>
 </body>
 </html>
