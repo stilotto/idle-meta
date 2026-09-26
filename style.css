@@ -585,3 +585,7 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; bord
 .lvl-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px; border-radius: 14px; background: rgba(195, 139, 255, .12); border: 1px solid rgba(195, 139, 255, .35); font-size: 14px; }
 .lvl-line b { color: var(--xp); font-size: 16px; }
 .lvl-line span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- link back to the stilotto.github.io directory ---------- */
+.home-link { align-self: center; padding: 6px 10px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.home-link:hover, .home-link:focus-visible { color: var(--text); text-decoration: underline; }

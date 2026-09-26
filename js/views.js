@@ -40,7 +40,8 @@ export function mountHome(root, openGame) {
     <section>
       <div class="sec-h">Coming soon to the App Store</div>
       <div class="soon">${SOON.map(x => `<div class="soon-card"><span class="app-icon sm">${x.art}</span><b>${x.name}</b><small>${x.genre}</small></div>`).join('')}</div>
-    </section>`;
+    </section>
+    <a class="home-link" href="https://stilotto.github.io/">More games from Stilotto →</a>`;
   const armed = {};
   root.onclick = e => {
     const card = e.target.closest('[data-id]');
