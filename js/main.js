@@ -22,7 +22,7 @@ status.innerHTML = `
     <b data-k="lvl"></b>
   </button>
   <div class="st-main">
-    <div class="st-row"><span class="st-title">Idle Hands</span><span class="st-xp" data-k="xp"></span></div>
+    <div class="st-row"><span class="st-title">Idle Meta</span><span class="st-xp" data-k="xp"></span></div>
     <div class="st-pills">
       <button class="pill money" data-go="budget">💵 <b data-k="wallet"></b></button>
       <button class="pill insight" data-go="research">💡 <b data-k="ins"></b></button>
@@ -80,7 +80,7 @@ if (fresh) {
     card.classList.add('intro');
     card.innerHTML = `
       <div class="intro-phone">📱</div>
-      <h2>Idle Hands</h2>
+      <h2>Idle Meta</h2>
       <p>You play idle games. Lots of them.</p>
       <ul>
         <li>⚡ Split your <b>Focus</b> between games. More focus, faster game.</li>

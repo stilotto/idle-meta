@@ -1,4 +1,4 @@
-# idle-meta: Idle Hands
+# idle-meta: Idle Meta
 
 An idle game about playing idle games. Served by GitHub Pages at
 https://stilotto.github.io/idle-meta/ and linked from the stilotto.github.io
